@@ -201,38 +201,100 @@ class Paper_ID_API {
             Paper_ID_Helper::log( 'Request Payload: ' . wp_json_encode( $payload ), 'info' );
         }
 
-        $base_urls = $this->get_base_urls();
-        $paths     = array(
-            '/api/v1/pay-in/payment-link',
-            '/api/v1/digital-payment',
-            '/api/v1/payment-request',
-            '/api/v1/sales-invoices/generate-payment-link',
-            '/open-api/v1/pay-in/payment-link',
-            '/open-api/v1/digital-payment',
-            '/open-api/v1/invoices/generate-payment-link',
-            '/api/v2/pay-in/payment-link',
-        );
-
-        $endpoints = array();
-        foreach ( $base_urls as $base_url ) {
-            foreach ( $paths as $path ) {
-                $endpoints[] = rtrim( $base_url, '/' ) . $path;
-            }
-        }
-
-        $token   = $this->get_auth_token();
-        $headers = array(
+        $base_url = $this->get_base_url();
+        $headers  = array(
             'Content-Type'  => 'application/json',
             'Accept'        => 'application/json',
-            'client-id'     => $this->client_id,
-            'client-secret' => $this->client_secret,
             'client_id'     => $this->client_id,
             'client_secret' => $this->client_secret,
         );
 
+        $token = $this->get_auth_token();
         if ( is_string( $token ) && ! empty( $token ) ) {
             $headers['Authorization'] = 'Bearer ' . $token;
         }
+
+        // Step 1: Get or verify partner ID if needed
+        $partner_id = null;
+        $partner_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/partners', array(
+            'headers' => $headers,
+            'timeout' => 15,
+        ) );
+        if ( ! is_wp_error( $partner_res ) && 200 === wp_remote_retrieve_response_code( $partner_res ) ) {
+            $p_data = json_decode( wp_remote_retrieve_body( $partner_res ), true );
+            if ( ! empty( $p_data['partners'][0]['uuid'] ) ) {
+                $partner_id = $p_data['partners'][0]['uuid'];
+            }
+        }
+
+        // Step 2: Build Sales Invoice payload
+        $invoice_payload = array(
+            'number'       => 'INV/WC/' . $order_id . '-' . time(),
+            'invoice_date' => date( 'Y-m-d' ),
+            'due_date'     => date( 'Y-m-d', strtotime( '+1 day' ) ),
+            'partner_name'  => $customer_name ? $customer_name : 'Customer WooCommerce',
+            'partner_email' => $customer_email,
+            'partner_phone' => $customer_phone,
+            'items'        => $items,
+        );
+
+        if ( $partner_id ) {
+            $invoice_payload['partner_id'] = $partner_id;
+        }
+
+        $response = wp_remote_post( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
+            'headers' => $headers,
+            'body'    => wp_json_encode( $invoice_payload ),
+            'timeout' => 30,
+        ) );
+
+        if ( ! is_wp_error( $response ) ) {
+            $status_code = wp_remote_retrieve_response_code( $response );
+            $body_str    = wp_remote_retrieve_body( $response );
+            $body        = json_decode( $body_str, true );
+
+            Paper_ID_Helper::log( "POST /api/v1/sales-invoices [HTTP {$status_code}]: " . $body_str, $status_code >= 200 && $status_code < 300 ? 'info' : 'error' );
+
+            if ( $status_code >= 200 && $status_code < 300 ) {
+                // Fetch latest invoice details to extract payment_link
+                $list_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
+                    'headers' => $headers,
+                    'timeout' => 15,
+                ) );
+
+                if ( ! is_wp_error( $list_res ) && 200 === wp_remote_retrieve_response_code( $list_res ) ) {
+                    $list_body = json_decode( wp_remote_retrieve_body( $list_res ), true );
+                    if ( ! empty( $list_body['invoices'][0]['uuid'] ) ) {
+                        $latest_uuid = $list_body['invoices'][0]['uuid'];
+                        $detail_res  = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices/' . $latest_uuid, array(
+                            'headers' => $headers,
+                            'timeout' => 15,
+                        ) );
+
+                        if ( ! is_wp_error( $detail_res ) && 200 === wp_remote_retrieve_response_code( $detail_res ) ) {
+                            $detail_body = json_decode( wp_remote_retrieve_body( $detail_res ), true );
+                            if ( ! empty( $detail_body['data']['payment_link'] ) ) {
+                                $raw_link    = $detail_body['data']['payment_link'];
+                                $payment_url = 0 === strpos( $raw_link, 'http' ) ? $raw_link : 'https://' . $raw_link;
+                                Paper_ID_Helper::log( "Payment Link Generated Successfully: {$payment_url}", 'info' );
+                                return array(
+                                    'success'     => true,
+                                    'payment_url' => $payment_url,
+                                    'raw'         => $detail_body,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Step 3: Fallback endpoints if direct sales-invoices flow fails
+        $endpoints = array(
+            rtrim( $base_url, '/' ) . '/api/v1/pay-in/payment-link',
+            rtrim( $base_url, '/' ) . '/api/v1/digital-payment',
+            rtrim( $base_url, '/' ) . '/api/v1/payment-request',
+        );
 
         $last_error = null;
 
@@ -253,40 +315,33 @@ class Paper_ID_API {
             $body_str    = wp_remote_retrieve_body( $response );
             $body        = json_decode( $body_str, true );
 
-            Paper_ID_Helper::log( "API Response from {$endpoint} [HTTP {$status_code}]: " . $body_str, $status_code >= 200 && $status_code < 300 ? 'info' : 'error' );
+            Paper_ID_Helper::log( "Fallback API Response from {$endpoint} [HTTP {$status_code}]: " . $body_str, $status_code >= 200 && $status_code < 300 ? 'info' : 'error' );
 
             if ( $status_code >= 200 && $status_code < 300 ) {
                 $payment_url = '';
-
                 if ( ! empty( $body['data']['payment_url'] ) ) {
                     $payment_url = $body['data']['payment_url'];
                 } elseif ( ! empty( $body['data']['link_url'] ) ) {
                     $payment_url = $body['data']['link_url'];
-                } elseif ( ! empty( $body['data']['url'] ) ) {
-                    $payment_url = $body['data']['url'];
                 } elseif ( ! empty( $body['payment_url'] ) ) {
                     $payment_url = $body['payment_url'];
-                } elseif ( ! empty( $body['url'] ) ) {
-                    $payment_url = $body['url'];
                 }
 
                 if ( ! empty( $payment_url ) ) {
                     return array(
                         'success'     => true,
-                        'payment_url' => $payment_url,
+                        'payment_url' => 0 === strpos( $payment_url, 'http' ) ? $payment_url : 'https://' . $payment_url,
                         'raw'         => $body,
                     );
                 }
             }
 
-            // Extract error message from API response
             $msg = isset( $body['message'] ) ? ( is_array( $body['message'] ) ? implode( ', ', $body['message'] ) : $body['message'] ) : '';
             if ( isset( $body['error']['message'] ) ) {
                 $msg = $body['error']['message'];
             }
             $last_error = sprintf( __( 'Paper.id API Response [HTTP %d]: %s', 'paper-id-woocommerce' ), $status_code, $msg ? $msg : $body_str );
 
-            // If endpoint exists (not HTTP 404), stop fallback loop and report authoritative API error
             if ( 404 !== $status_code ) {
                 break;
             }
