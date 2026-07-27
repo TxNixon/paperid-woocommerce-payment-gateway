@@ -279,15 +279,15 @@ class Paper_ID_API {
                 }
             }
 
-            // Only break/report if error is not 404 (e.g. 400 Bad Request or 401 Unauthorized gives specific validation info)
-            $msg = isset( $body['message'] ) ? ( is_array($body['message']) ? implode(', ', $body['message']) : $body['message'] ) : '';
+            // Extract error message from API response
+            $msg = isset( $body['message'] ) ? ( is_array( $body['message'] ) ? implode( ', ', $body['message'] ) : $body['message'] ) : '';
             if ( isset( $body['error']['message'] ) ) {
                 $msg = $body['error']['message'];
             }
             $last_error = sprintf( __( 'Paper.id API Response [HTTP %d]: %s', 'paper-id-woocommerce' ), $status_code, $msg ? $msg : $body_str );
 
-            // If we get a validation error (400 or 422 or 401), stop fallback and report the actual validation message
-            if ( in_array( $status_code, array( 400, 401, 422 ), true ) ) {
+            // If endpoint exists (not HTTP 404), stop fallback loop and report authoritative API error
+            if ( 404 !== $status_code ) {
                 break;
             }
         }
