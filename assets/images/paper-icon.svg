@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 220" width="100%" height="100%">
+  <defs>
+    <!-- Blue Ribbon Gradient -->
+    <linearGradient id="iconBlueGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1A73E8"/>
+      <stop offset="50%" stop-color="#288CE9"/>
+      <stop offset="100%" stop-color="#3B99FC"/>
+    </linearGradient>
+    
+    <!-- Lime Green Airplane Gradient -->
+    <linearGradient id="iconGreenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9DE026"/>
+      <stop offset="100%" stop-color="#7CB342"/>
+    </linearGradient>
+
+    <!-- Drop Shadow -->
+    <filter id="iconShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1A73E8" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#iconShadow)">
+    <!-- Main Paper.id Blue Ribbon 'p' Loop -->
+    <path d="M 82 175 C 55 135 50 82 88 54 C 128 25 178 45 186 88 C 194 132 152 165 110 162 C 72 159 55 115 78 72 C 92 48 125 34 165 34 L 180 34" 
+          fill="none" 
+          stroke="url(#iconBlueGrad)" 
+          stroke-width="18" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Green Paper Airplane at top-right tip -->
+    <g transform="translate(160, 12) rotate(-5)">
+      <!-- Main Plane Wing -->
+      <polygon points="15,22 75,12 37,50 44,34" fill="url(#iconGreenGrad)"/>
+      <!-- Shadow / Fold Wing -->
+      <polygon points="37,50 75,12 44,34" fill="#689F38"/>
+      <!-- Back fold -->
+      <polygon points="37,50 44,34 32,40" fill="#558B2F"/>
+    </g>
+  </g>
+</svg>

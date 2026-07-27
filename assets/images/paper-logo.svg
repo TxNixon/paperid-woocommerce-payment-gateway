@@ -1,7 +1,60 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" width="120" height="30">
-  <rect width="160" height="40" rx="6" fill="#1C2F52"/>
-  <text x="15" y="26" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#00D2D3">Paper</text>
-  <text x="72" y="26" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#FFFFFF">.id</text>
-  <circle cx="138" cy="20" r="10" fill="#2ECC71"/>
-  <path d="M133 20 L137 24 L144 16" stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 200" width="100%" height="100%">
+  <defs>
+    <!-- Blue Ribbon Gradient -->
+    <linearGradient id="paperBlueGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1A73E8"/>
+      <stop offset="50%" stop-color="#288CE9"/>
+      <stop offset="100%" stop-color="#3B99FC"/>
+    </linearGradient>
+    
+    <!-- Lime Green Airplane Gradient -->
+    <linearGradient id="paperGreenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9DE026"/>
+      <stop offset="100%" stop-color="#7CB342"/>
+    </linearGradient>
+
+    <!-- Drop Shadow for Premium Look -->
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1A73E8" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#softShadow)">
+    <!-- Main Paper.id Blue Ribbon 'p' Loop -->
+    <path d="M 82 165 C 55 125 50 72 88 44 C 128 15 178 35 186 78 C 194 122 152 155 110 152 C 72 149 55 105 78 62 C 92 38 125 24 165 24 L 180 24" 
+          fill="none" 
+          stroke="url(#paperBlueGrad)" 
+          stroke-width="17" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Green Paper Airplane at top-right tip -->
+    <g transform="translate(160, 2) rotate(-5)">
+      <!-- Main Plane Wing -->
+      <polygon points="15,22 72,12 35,48 42,32" fill="url(#paperGreenGrad)"/>
+      <!-- Shadow / Fold Wing -->
+      <polygon points="35,48 72,12 42,32" fill="#689F38"/>
+      <!-- Back fold -->
+      <polygon points="35,48 42,32 30,38" fill="#558B2F"/>
+    </g>
+  </g>
+
+  <!-- Brand Typography -->
+  <g transform="translate(230, 125)">
+    <!-- "Paper" in bold brand navy/blue -->
+    <text x="0" y="0" 
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+          font-size="82" 
+          font-weight="800" 
+          letter-spacing="-1.5" 
+          fill="#1C2F52">Paper</text>
+    
+    <!-- ".id" in vibrant lime green -->
+    <text x="228" y="0" 
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+          font-size="82" 
+          font-weight="800" 
+          letter-spacing="-1" 
+          fill="#8CC63F">.id</text>
+  </g>
 </svg>
