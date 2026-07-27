@@ -2,3 +2,5 @@
 *.zip
 .vscode/
 .idea/
+*.log
+woocommerce_logs*/
