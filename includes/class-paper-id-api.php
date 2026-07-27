@@ -51,15 +51,31 @@ class Paper_ID_API {
     }
 
     /**
-     * Get Base API URL depending on environment.
+     * Get Base API URLs depending on environment.
+     *
+     * @return array Base URLs list.
+     */
+    public function get_base_urls() {
+        if ( 'production' === $this->environment ) {
+            return array(
+                'https://open-api.paper.id',
+                'https://api.paper.id',
+            );
+        }
+        return array(
+            'https://open-api.stag-v2.paper.id',
+            'https://api-sandbox.paper.id',
+        );
+    }
+
+    /**
+     * Get primary Base API URL.
      *
      * @return string Base URL.
      */
     public function get_base_url() {
-        if ( 'production' === $this->environment ) {
-            return 'https://api.paper.id';
-        }
-        return 'https://api-sandbox.paper.id';
+        $urls = $this->get_base_urls();
+        return $urls[0];
     }
 
     /**
@@ -79,35 +95,53 @@ class Paper_ID_API {
             return $cached_token;
         }
 
-        $url  = rtrim( $this->get_base_url(), '/' ) . '/open-api/v1/auth/login';
-        $body = array(
-            'client_id'     => $this->client_id,
-            'client_secret' => $this->client_secret,
+        $base_urls = $this->get_base_urls();
+        $paths     = array(
+            '/api/v1/auth/login',
+            '/open-api/v1/auth/login',
+            '/api/v1/auth',
         );
 
-        $response = wp_remote_post( $url, array(
-            'headers' => array(
-                'Content-Type' => 'application/json',
-                'Accept'       => 'application/json',
-            ),
-            'body'    => wp_json_encode( $body ),
-            'timeout' => 30,
-        ) );
+        foreach ( $base_urls as $base_url ) {
+            foreach ( $paths as $path ) {
+                $url  = rtrim( $base_url, '/' ) . $path;
+                $body = array(
+                    'client_id'     => $this->client_id,
+                    'client_secret' => $this->client_secret,
+                );
 
-        if ( is_wp_error( $response ) ) {
-            Paper_ID_Helper::log( 'Auth Error: ' . $response->get_error_message(), 'error' );
-            return null;
-        }
+                $response = wp_remote_post( $url, array(
+                    'headers' => array(
+                        'Content-Type' => 'application/json',
+                        'Accept'       => 'application/json',
+                    ),
+                    'body'    => wp_json_encode( $body ),
+                    'timeout' => 15,
+                ) );
 
-        $status_code   = wp_remote_retrieve_response_code( $response );
-        $response_body = json_decode( wp_remote_retrieve_body( $response ), true );
+                if ( is_wp_error( $response ) ) {
+                    continue;
+                }
 
-        if ( $status_code >= 200 && $status_code < 300 ) {
-            if ( ! empty( $response_body['data']['token'] ) ) {
-                $token      = $response_body['data']['token'];
-                $expires_in = isset( $response_body['data']['expires_in'] ) ? (int) $response_body['data']['expires_in'] - 60 : 3500;
-                set_transient( $transient_key, $token, max( 60, $expires_in ) );
-                return $token;
+                $status_code   = wp_remote_retrieve_response_code( $response );
+                $response_body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+                if ( $status_code >= 200 && $status_code < 300 ) {
+                    $token = '';
+                    if ( ! empty( $response_body['data']['token'] ) ) {
+                        $token = $response_body['data']['token'];
+                    } elseif ( ! empty( $response_body['token'] ) ) {
+                        $token = $response_body['token'];
+                    } elseif ( ! empty( $response_body['data']['access_token'] ) ) {
+                        $token = $response_body['data']['access_token'];
+                    }
+
+                    if ( ! empty( $token ) ) {
+                        $expires_in = isset( $response_body['data']['expires_in'] ) ? (int) $response_body['data']['expires_in'] - 60 : 3500;
+                        set_transient( $transient_key, $token, max( 60, $expires_in ) );
+                        return $token;
+                    }
+                }
             }
         }
 
@@ -142,6 +176,8 @@ class Paper_ID_API {
         $items = Paper_ID_Helper::get_order_items_payload( $order );
 
         $payload = array(
+            'client_id'      => $this->client_id,
+            'client_secret'  => $this->client_secret,
             'external_id'    => 'WC-' . $order_id . '-' . time(),
             'order_id'       => (string) $order_id,
             'order_number'   => (string) $order_number,
@@ -165,12 +201,32 @@ class Paper_ID_API {
             Paper_ID_Helper::log( 'Request Payload: ' . wp_json_encode( $payload ), 'info' );
         }
 
-        // Endpoint list for Paper.id API
-        $endpoints = array(
-            rtrim( $this->get_base_url(), '/' ) . '/open-api/v1/pay-in/payment-link',
-            rtrim( $this->get_base_url(), '/' ) . '/open-api/v1/digital-payment',
-            rtrim( $this->get_base_url(), '/' ) . '/open-api/v1/invoices/generate-payment-link',
+        $base_urls = $this->get_base_urls();
+        $paths     = array(
+            '/api/v1/pay-in/payment-link',
+            '/api/v1/digital-payment',
+            '/api/v1/payment-request',
+            '/api/v1/sales-invoices/generate-payment-link',
+            '/open-api/v1/pay-in/payment-link',
+            '/open-api/v1/digital-payment',
+            '/open-api/v1/invoices/generate-payment-link',
+            '/api/v2/pay-in/payment-link',
         );
+
+        $endpoints = array();
+        foreach ( $base_urls as $base_url ) {
+            foreach ( $paths as $path ) {
+                $endpoints[] = rtrim( $base_url, '/' ) + $path; // wait, string concat
+            }
+        }
+
+        // Build endpoint URLs cleanly
+        $endpoints = array();
+        foreach ( $base_urls as $base_url ) {
+            foreach ( $paths as $path ) {
+                $endpoints[] = rtrim( $base_url, '/' ) . $path;
+            }
+        }
 
         $token   = $this->get_auth_token();
         $headers = array(
@@ -178,6 +234,8 @@ class Paper_ID_API {
             'Accept'        => 'application/json',
             'client-id'     => $this->client_id,
             'client-secret' => $this->client_secret,
+            'client_id'     => $this->client_id,
+            'client_secret' => $this->client_secret,
         );
 
         if ( is_string( $token ) && ! empty( $token ) ) {
@@ -190,7 +248,7 @@ class Paper_ID_API {
             $response = wp_remote_post( $endpoint, array(
                 'headers' => $headers,
                 'body'    => wp_json_encode( $payload ),
-                'timeout' => 45,
+                'timeout' => 30,
             ) );
 
             if ( is_wp_error( $response ) ) {
@@ -229,11 +287,17 @@ class Paper_ID_API {
                 }
             }
 
+            // Only break/report if error is not 404 (e.g. 400 Bad Request or 401 Unauthorized gives specific validation info)
             $msg = isset( $body['message'] ) ? ( is_array($body['message']) ? implode(', ', $body['message']) : $body['message'] ) : '';
             if ( isset( $body['error']['message'] ) ) {
                 $msg = $body['error']['message'];
             }
             $last_error = sprintf( __( 'Paper.id API Response [HTTP %d]: %s', 'paper-id-woocommerce' ), $status_code, $msg ? $msg : $body_str );
+
+            // If we get a validation error (400 or 422 or 401), stop fallback and report the actual validation message
+            if ( in_array( $status_code, array( 400, 401, 422 ), true ) ) {
+                break;
+            }
         }
 
         return new WP_Error( 'paper_id_api_error', $last_error ? $last_error : __( 'Gagal terhubung ke Paper.id API.', 'paper-id-woocommerce' ) );
