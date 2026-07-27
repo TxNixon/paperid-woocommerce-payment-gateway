@@ -216,14 +216,6 @@ class Paper_ID_API {
         $endpoints = array();
         foreach ( $base_urls as $base_url ) {
             foreach ( $paths as $path ) {
-                $endpoints[] = rtrim( $base_url, '/' ) + $path; // wait, string concat
-            }
-        }
-
-        // Build endpoint URLs cleanly
-        $endpoints = array();
-        foreach ( $base_urls as $base_url ) {
-            foreach ( $paths as $path ) {
                 $endpoints[] = rtrim( $base_url, '/' ) . $path;
             }
         }
