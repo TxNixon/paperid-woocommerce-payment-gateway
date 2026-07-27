@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" width="120" height="30">
+  <rect width="160" height="40" rx="6" fill="#1C2F52"/>
+  <text x="15" y="26" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#00D2D3">Paper</text>
+  <text x="72" y="26" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#FFFFFF">.id</text>
+  <circle cx="138" cy="20" r="10" fill="#2ECC71"/>
+  <path d="M133 20 L137 24 L144 16" stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
