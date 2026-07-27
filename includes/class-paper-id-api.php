@@ -248,6 +248,18 @@ class Paper_ID_API {
             'timeout' => 30,
         ) );
 
+        $options = get_option( 'woocommerce_paper_id_settings', array() );
+        if ( ! empty( $options['custom_payment_url'] ) ) {
+            $custom_url  = trim( $options['custom_payment_url'] );
+            $payment_url = 0 === strpos( $custom_url, 'http' ) ? $custom_url : 'https://' . $custom_url;
+            Paper_ID_Helper::log( "Using Custom PaperPay In Link: {$payment_url}", 'info' );
+            return array(
+                'success'     => true,
+                'payment_url' => $payment_url,
+                'raw'         => array( 'source' => 'custom_payment_url' ),
+            );
+        }
+
         if ( ! is_wp_error( $response ) ) {
             $status_code = wp_remote_retrieve_response_code( $response );
             $body_str    = wp_remote_retrieve_body( $response );
@@ -256,17 +268,37 @@ class Paper_ID_API {
             Paper_ID_Helper::log( "POST /api/v1/sales-invoices [HTTP {$status_code}]: " . $body_str, $status_code >= 200 && $status_code < 300 ? 'info' : 'error' );
 
             if ( $status_code >= 200 && $status_code < 300 ) {
-                // Fetch latest invoice details to extract payment_link
+                // Fetch invoice list to extract an unpaid invoice payment_link
                 $list_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
                     'headers' => $headers,
                     'timeout' => 15,
                 ) );
 
                 if ( ! is_wp_error( $list_res ) && 200 === wp_remote_retrieve_response_code( $list_res ) ) {
-                    $list_body = json_decode( wp_remote_retrieve_body( $list_res ), true );
-                    if ( ! empty( $list_body['invoices'][0]['uuid'] ) ) {
-                        $latest_uuid = $list_body['invoices'][0]['uuid'];
-                        $detail_res  = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices/' . $latest_uuid, array(
+                    $list_body   = json_decode( wp_remote_retrieve_body( $list_res ), true );
+                    $target_uuid = null;
+
+                    if ( ! empty( $list_body['invoices'] ) && is_array( $list_body['invoices'] ) ) {
+                        foreach ( $list_body['invoices'] as $inv ) {
+                            $totals     = isset( $inv['totals'] ) ? $inv['totals'] : array();
+                            $amount_due = isset( $totals['amountDueUnformatted'] ) ? (float) $totals['amountDueUnformatted'] : ( isset( $totals['amountDue'] ) ? (float) str_replace( array(',', '.00'), '', $totals['amountDue'] ) : 1 );
+                            $status_val = isset( $inv['status'] ) ? (int) $inv['status'] : 0;
+
+                            // Filter out paid invoices (status 2 = paid). Pick an unpaid invoice.
+                            if ( 2 !== $status_val && $amount_due > 0 && ! empty( $inv['uuid'] ) ) {
+                                $target_uuid = $inv['uuid'];
+                                break;
+                            }
+                        }
+
+                        // Fallback to first invoice only if no unpaid invoice is found
+                        if ( ! $target_uuid && ! empty( $list_body['invoices'][0]['uuid'] ) ) {
+                            $target_uuid = $list_body['invoices'][0]['uuid'];
+                        }
+                    }
+
+                    if ( $target_uuid ) {
+                        $detail_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices/' . $target_uuid, array(
                             'headers' => $headers,
                             'timeout' => 15,
                         ) );

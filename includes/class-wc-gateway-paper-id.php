@@ -114,6 +114,13 @@ class WC_Gateway_Paper_ID extends WC_Payment_Gateway {
                 'description' => __( 'Client Secret dari Settings > API Dashboard di akun Paper.id Anda.', 'paper-id-woocommerce' ),
                 'default'     => '',
             ),
+            'custom_payment_url' => array(
+                'title'       => __( 'PaperPay In / Payment Link (Opsional)', 'paper-id-woocommerce' ),
+                'type'        => 'text',
+                'placeholder' => 'https://paper.id/pay-in/toko-anda',
+                'description' => __( 'Masukkan Tautan Pembayaran / PaperPay In resmi dari Paper.id Anda jika ingin mengarahkan pelanggan langsung ke link pembayaran toko Anda.', 'paper-id-woocommerce' ),
+                'default'     => '',
+            ),
             'callback_url' => array(
                 'title'       => __( 'Callback / Webhook URL', 'paper-id-woocommerce' ),
                 'type'        => 'title',
