@@ -81,7 +81,7 @@ Plugin **Paper.id Payment Gateway for WooCommerce** dirancang khusus untuk pebis
 
 ## 🔄 Sistem Auto-Update Otomatis
 
-Plugin ini dilengkapi fitur **GitHub Auto-Update Engine**. Ketika ada pembaruan versi baru dari pengembang:
+Plugin ini dilengkapi fitur **GitHub Auto-Update Engine**. Ketika ada pembaruan versi baru dari dev:
 
 1. Notifikasi update akan muncul secara otomatis di menu **Plugins** admin WordPress toko Anda.
 2. Anda cukup mengklik **"Update Now"** untuk mendapatkan fitur & perbaikan terbaru tanpa perlu mengunduh ulang file zip secara manual.
