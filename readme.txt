@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, paper.id, credit card, qris, indonesia
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.8
+Stable tag: 1.0.9
 License: GPLv2 or later
 
 Integrasi resmi & mudah untuk menerima pembayaran Kartu Kredit, QRIS, Virtual Account, dan E-Wallet melalui Paper.id di toko WooCommerce Anda.
@@ -31,6 +31,10 @@ Plugin ini mengintegrasikan layanan **Paper.id Open API** ke dalam WooCommerce. 
 7. Simpan perubahan.
 
 == Changelog ==
+
+= 1.0.9 =
+* Penambahan pengaturan Notifikasi WhatsApp & Email resmi Paper.id di WooCommerce Settings.
+* Logika pintar pengiriman notifikasi otomatis berdasarkan input email & nomor HP pelanggan.
 
 = 1.0.8 =
 * Integrasi resmi endpoint Paper.id Open API /api/v1/store-invoice.

@@ -121,6 +121,25 @@ class WC_Gateway_Paper_ID extends WC_Payment_Gateway {
                 'description' => __( 'Masukkan Tautan Pembayaran / PaperPay In resmi dari Paper.id Anda jika ingin mengarahkan pelanggan langsung ke link pembayaran toko Anda.', 'paper-id-woocommerce' ),
                 'default'     => '',
             ),
+            'notification_section' => array(
+                'title'       => __( 'Pengaturan Notifikasi Otomatis Paper.id', 'paper-id-woocommerce' ),
+                'type'        => 'title',
+                'description' => __( 'Atur pengiriman notifikasi invoice & link pembayaran resmi Paper.id ke pelanggan saat pesanan dibuat.', 'paper-id-woocommerce' ),
+            ),
+            'send_whatsapp' => array(
+                'title'       => __( 'Notifikasi WhatsApp', 'paper-id-woocommerce' ),
+                'type'        => 'checkbox',
+                'label'       => __( 'Kirim notifikasi invoice & tagihan via WhatsApp resmi Paper.id ke nomor HP pelanggan', 'paper-id-woocommerce' ),
+                'default'     => 'yes',
+                'description' => __( 'Notifikasi WhatsApp hanya akan dikirim jika opsi ini diaktifkan dan nomor HP diisi saat checkout.', 'paper-id-woocommerce' ),
+            ),
+            'send_email' => array(
+                'title'       => __( 'Notifikasi Email', 'paper-id-woocommerce' ),
+                'type'        => 'checkbox',
+                'label'       => __( 'Kirim notifikasi invoice & tagihan via Email resmi Paper.id ke alamat email pelanggan', 'paper-id-woocommerce' ),
+                'default'     => 'yes',
+                'description' => __( 'Notifikasi Email hanya akan dikirim jika opsi ini diaktifkan dan alamat email diisi saat checkout.', 'paper-id-woocommerce' ),
+            ),
             'callback_url' => array(
                 'title'       => __( 'Callback / Webhook URL', 'paper-id-woocommerce' ),
                 'type'        => 'title',

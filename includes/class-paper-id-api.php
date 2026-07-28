@@ -210,7 +210,19 @@ class Paper_ID_API {
             'client_secret' => $this->client_secret,
         );
 
-        $inv_number   = 'INV/WC/' . $order_number . '-' . time();
+        $options      = get_option( 'woocommerce_paper_id_settings', array() );
+        $opt_whatsapp = ! isset( $options['send_whatsapp'] ) || 'yes' === $options['send_whatsapp'];
+        $opt_email    = ! isset( $options['send_email'] ) || 'yes' === $options['send_email'];
+
+        $send = array();
+        if ( $opt_whatsapp && ! empty( $customer_phone ) ) {
+            $send['whatsapp'] = true;
+        }
+        if ( $opt_email && ! empty( $customer_email ) && is_email( $customer_email ) ) {
+            $send['email'] = true;
+        }
+
+        $inv_number    = 'INV/WC/' . $order_number . '-' . time();
         $store_payload = array(
             'invoice_date' => date( 'd-m-Y' ),
             'due_date'     => date( 'd-m-Y', strtotime( '+1 day' ) ),
@@ -222,11 +234,11 @@ class Paper_ID_API {
                 'phone' => $customer_phone,
             ),
             'items'        => $items,
-            'send'         => array(
-                'whatsapp' => true,
-                'email'    => true,
-            ),
         );
+
+        if ( ! empty( $send ) ) {
+            $store_payload['send'] = $send;
+        }
 
         Paper_ID_Helper::log( "Sending Open API store-invoice request for Order #{$order_id} (Number: {$inv_number})", 'info' );
 
