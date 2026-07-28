@@ -222,6 +222,10 @@ class Paper_ID_API {
                 'phone' => $customer_phone,
             ),
             'items'        => $items,
+            'send'         => array(
+                'whatsapp' => true,
+                'email'    => true,
+            ),
         );
 
         Paper_ID_Helper::log( "Sending Open API store-invoice request for Order #{$order_id} (Number: {$inv_number})", 'info' );
