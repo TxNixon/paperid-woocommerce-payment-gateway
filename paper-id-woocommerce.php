@@ -3,7 +3,7 @@
  * Plugin Name: Paper.id Payment Gateway for WooCommerce
  * Plugin URI: https://paper.id
  * Description: Accept Credit Cards, QRIS, Virtual Account, and E-Wallet payments in WooCommerce using Paper.id Payment Gateway.
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: Joe
  * Author URI: https://paper.id
  * Text Domain: paper-id-woocommerce
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define Plugin Constants
-define( 'PAPER_ID_WC_VERSION', '1.0.6' );
+define( 'PAPER_ID_WC_VERSION', '1.0.7' );
 define( 'PAPER_ID_WC_FILE', __FILE__ );
 define( 'PAPER_ID_WC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'PAPER_ID_WC_URL', plugin_dir_url( __FILE__ ) );

@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, paper.id, credit card, qris, indonesia
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPLv2 or later
 
 Integrasi resmi & mudah untuk menerima pembayaran Kartu Kredit, QRIS, Virtual Account, dan E-Wallet melalui Paper.id di toko WooCommerce Anda.

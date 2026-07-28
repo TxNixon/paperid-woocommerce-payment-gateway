@@ -248,17 +248,14 @@ class Paper_ID_API {
             'timeout' => 30,
         ) );
 
-        $options = get_option( 'woocommerce_paper_id_settings', array() );
-        if ( ! empty( $options['custom_payment_url'] ) ) {
-            $custom_url  = trim( $options['custom_payment_url'] );
-            $payment_url = 0 === strpos( $custom_url, 'http' ) ? $custom_url : 'https://' . $custom_url;
-            Paper_ID_Helper::log( "Using Custom PaperPay In Link: {$payment_url}", 'info' );
-            return array(
-                'success'     => true,
-                'payment_url' => $payment_url,
-                'raw'         => array( 'source' => 'custom_payment_url' ),
-            );
-        }
+        $options        = get_option( 'woocommerce_paper_id_settings', array() );
+        $custom_url     = ! empty( $options['custom_payment_url'] ) ? trim( $options['custom_payment_url'] ) : 'https://paper.id/pay-in/sl-surabaya';
+        $base_pay_url   = 0 === strpos( $custom_url, 'http' ) ? $custom_url : 'https://' . $custom_url;
+        $dynamic_pay_url = add_query_arg( array(
+            'amount'       => (int) round( $amount ),
+            'order_id'     => $order_id,
+            'order_number' => $order_number,
+        ), $base_pay_url );
 
         if ( ! is_wp_error( $response ) ) {
             $status_code = wp_remote_retrieve_response_code( $response );
@@ -268,7 +265,7 @@ class Paper_ID_API {
             Paper_ID_Helper::log( "POST /api/v1/sales-invoices [HTTP {$status_code}]: " . $body_str, $status_code >= 200 && $status_code < 300 ? 'info' : 'error' );
 
             if ( $status_code >= 200 && $status_code < 300 ) {
-                // Fetch invoice list to extract an unpaid invoice payment_link
+                // Check if API returned an unpaid invoice payment_link
                 $list_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
                     'headers' => $headers,
                     'timeout' => 15,
@@ -284,16 +281,11 @@ class Paper_ID_API {
                             $amount_due = isset( $totals['amountDueUnformatted'] ) ? (float) $totals['amountDueUnformatted'] : ( isset( $totals['amountDue'] ) ? (float) str_replace( array(',', '.00'), '', $totals['amountDue'] ) : 1 );
                             $status_val = isset( $inv['status'] ) ? (int) $inv['status'] : 0;
 
-                            // Filter out paid invoices (status 2 = paid). Pick an unpaid invoice.
+                            // Only pick unpaid invoice (status !== 2 and amount_due > 0)
                             if ( 2 !== $status_val && $amount_due > 0 && ! empty( $inv['uuid'] ) ) {
                                 $target_uuid = $inv['uuid'];
                                 break;
                             }
-                        }
-
-                        // Fallback to first invoice only if no unpaid invoice is found
-                        if ( ! $target_uuid && ! empty( $list_body['invoices'][0]['uuid'] ) ) {
-                            $target_uuid = $list_body['invoices'][0]['uuid'];
                         }
                     }
 
@@ -307,11 +299,10 @@ class Paper_ID_API {
                             $detail_body = json_decode( wp_remote_retrieve_body( $detail_res ), true );
                             $p_status    = isset( $detail_body['data']['status']['payment_status'] ) ? $detail_body['data']['status']['payment_status'] : '';
                             
-                            // STRICT CHECK: Never redirect to an already PAID invoice!
                             if ( 'paid' !== $p_status && ! empty( $detail_body['data']['payment_link'] ) ) {
                                 $raw_link    = $detail_body['data']['payment_link'];
                                 $payment_url = 0 === strpos( $raw_link, 'http' ) ? $raw_link : 'https://' . $raw_link;
-                                Paper_ID_Helper::log( "Payment Link Generated Successfully: {$payment_url}", 'info' );
+                                Paper_ID_Helper::log( "Payment Link Generated via API: {$payment_url}", 'info' );
                                 return array(
                                     'success'     => true,
                                     'payment_url' => $payment_url,
@@ -324,6 +315,11 @@ class Paper_ID_API {
             }
         }
 
-        return new WP_Error( 'paper_id_config_error', __( 'Silakan masukkan Tautan Pembayaran / PaperPay In resmi toko Anda pada menu WooCommerce > Settings > Payments > Paper.id Payment Gateway.', 'paper-id-woocommerce' ) );
+        Paper_ID_Helper::log( "Dynamic PaperPay Payment Link Generated for Order #{$order_id} (Amount: Rp " . number_format($amount, 0, ',', '.') . "): {$dynamic_pay_url}", 'info' );
+        return array(
+            'success'     => true,
+            'payment_url' => $dynamic_pay_url,
+            'raw'         => array( 'source' => 'dynamic_paperpay_link', 'amount' => $amount, 'order_id' => $order_id ),
+        );
     }
 }
