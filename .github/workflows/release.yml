@@ -24,7 +24,7 @@ jobs:
           zip -r ../paper-id-woocommerce.zip paper-id-woocommerce
 
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: paper-id-woocommerce.zip
