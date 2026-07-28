@@ -228,34 +228,34 @@ class Paper_ID_API {
         }
 
         // Step 2: Build Sales Invoice payload
+        $inv_number      = 'INV/WC/' . $order_id . '-' . time();
         $invoice_payload = array(
-            'number'       => 'INV/WC/' . $order_id . '-' . time(),
-            'invoice_date' => date( 'Y-m-d' ),
-            'due_date'     => date( 'Y-m-d', strtotime( '+1 day' ) ),
+            'number'        => $inv_number,
+            'invoice_date'  => date( 'Y-m-d' ),
+            'due_date'      => date( 'Y-m-d', strtotime( '+1 day' ) ),
             'partner_name'  => $customer_name ? $customer_name : 'Customer WooCommerce',
             'partner_email' => $customer_email,
             'partner_phone' => $customer_phone,
-            'items'        => $items,
+            'partner'       => array(
+                'name'  => $customer_name ? $customer_name : 'Customer WooCommerce',
+                'email' => $customer_email,
+                'phone' => $customer_phone,
+            ),
+            'items'         => $items,
+            'notes'         => sprintf( __( 'Pembayaran Pesanan #%s di %s', 'paper-id-woocommerce' ), $order_number, get_bloginfo( 'name' ) ),
+            'terms'         => 'WooCommerce Order #' . $order_number,
         );
 
         if ( $partner_id ) {
             $invoice_payload['partner_id'] = $partner_id;
         }
 
+        $base_url = $this->get_base_url();
         $response = wp_remote_post( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
             'headers' => $headers,
             'body'    => wp_json_encode( $invoice_payload ),
             'timeout' => 30,
         ) );
-
-        $options        = get_option( 'woocommerce_paper_id_settings', array() );
-        $custom_url     = ! empty( $options['custom_payment_url'] ) ? trim( $options['custom_payment_url'] ) : 'https://paper.id/pay-in/sl-surabaya';
-        $base_pay_url   = 0 === strpos( $custom_url, 'http' ) ? $custom_url : 'https://' . $custom_url;
-        $dynamic_pay_url = add_query_arg( array(
-            'amount'       => (int) round( $amount ),
-            'order_id'     => $order_id,
-            'order_number' => $order_number,
-        ), $base_pay_url );
 
         if ( ! is_wp_error( $response ) ) {
             $status_code = wp_remote_retrieve_response_code( $response );
@@ -264,62 +264,137 @@ class Paper_ID_API {
 
             Paper_ID_Helper::log( "POST /api/v1/sales-invoices [HTTP {$status_code}]: " . $body_str, $status_code >= 200 && $status_code < 300 ? 'info' : 'error' );
 
-            if ( $status_code >= 200 && $status_code < 300 ) {
-                // Check if API returned an unpaid invoice payment_link
-                $list_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
-                    'headers' => $headers,
-                    'timeout' => 15,
-                ) );
+            if ( $status_code >= 200 && $status_code < 300 && is_array( $body ) ) {
+                // A. Check for direct payment URL field in POST response body
+                $direct_link = self::extract_payment_url_from_data( $body );
+                if ( $direct_link ) {
+                    Paper_ID_Helper::log( "Payment Link extracted directly from POST response: {$direct_link}", 'info' );
+                    return array(
+                        'success'     => true,
+                        'payment_url' => $direct_link,
+                        'raw'         => $body,
+                    );
+                }
 
-                if ( ! is_wp_error( $list_res ) && 200 === wp_remote_retrieve_response_code( $list_res ) ) {
-                    $list_body   = json_decode( wp_remote_retrieve_body( $list_res ), true );
-                    $target_uuid = null;
+                // B. Check for invoice UUID in POST response body
+                $created_uuid = self::extract_uuid_from_data( $body );
+                if ( $created_uuid ) {
+                    Paper_ID_Helper::log( "Sales Invoice UUID created: {$created_uuid}. Fetching invoice details...", 'info' );
+                    $detail_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices/' . $created_uuid, array(
+                        'headers' => $headers,
+                        'timeout' => 15,
+                    ) );
 
-                    if ( ! empty( $list_body['invoices'] ) && is_array( $list_body['invoices'] ) ) {
-                        foreach ( $list_body['invoices'] as $inv ) {
-                            $totals     = isset( $inv['totals'] ) ? $inv['totals'] : array();
-                            $amount_due = isset( $totals['amountDueUnformatted'] ) ? (float) $totals['amountDueUnformatted'] : ( isset( $totals['amountDue'] ) ? (float) str_replace( array(',', '.00'), '', $totals['amountDue'] ) : 1 );
-                            $status_val = isset( $inv['status'] ) ? (int) $inv['status'] : 0;
-
-                            // Only pick unpaid invoice (status !== 2 and amount_due > 0)
-                            if ( 2 !== $status_val && $amount_due > 0 && ! empty( $inv['uuid'] ) ) {
-                                $target_uuid = $inv['uuid'];
-                                break;
-                            }
-                        }
-                    }
-
-                    if ( $target_uuid ) {
-                        $detail_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices/' . $target_uuid, array(
-                            'headers' => $headers,
-                            'timeout' => 15,
-                        ) );
-
-                        if ( ! is_wp_error( $detail_res ) && 200 === wp_remote_retrieve_response_code( $detail_res ) ) {
-                            $detail_body = json_decode( wp_remote_retrieve_body( $detail_res ), true );
-                            $p_status    = isset( $detail_body['data']['status']['payment_status'] ) ? $detail_body['data']['status']['payment_status'] : '';
-                            
-                            if ( 'paid' !== $p_status && ! empty( $detail_body['data']['payment_link'] ) ) {
-                                $raw_link    = $detail_body['data']['payment_link'];
-                                $payment_url = 0 === strpos( $raw_link, 'http' ) ? $raw_link : 'https://' . $raw_link;
-                                Paper_ID_Helper::log( "Payment Link Generated via API: {$payment_url}", 'info' );
-                                return array(
-                                    'success'     => true,
-                                    'payment_url' => $payment_url,
-                                    'raw'         => $detail_body,
-                                );
-                            }
+                    if ( ! is_wp_error( $detail_res ) && 200 === wp_remote_retrieve_response_code( $detail_res ) ) {
+                        $detail_body = json_decode( wp_remote_retrieve_body( $detail_res ), true );
+                        $detail_link = self::extract_payment_url_from_data( $detail_body );
+                        if ( $detail_link ) {
+                            Paper_ID_Helper::log( "Payment Link generated via invoice details API: {$detail_link}", 'info' );
+                            return array(
+                                'success'     => true,
+                                'payment_url' => $detail_link,
+                                'raw'         => $detail_body,
+                            );
                         }
                     }
                 }
             }
+        } else {
+            Paper_ID_Helper::log( "POST /api/v1/sales-invoices WP_Error: " . $response->get_error_message(), 'error' );
         }
 
-        Paper_ID_Helper::log( "Dynamic PaperPay Payment Link Generated for Order #{$order_id} (Amount: Rp " . number_format($amount, 0, ',', '.') . "): {$dynamic_pay_url}", 'info' );
-        return array(
-            'success'     => true,
-            'payment_url' => $dynamic_pay_url,
-            'raw'         => array( 'source' => 'dynamic_paperpay_link', 'amount' => $amount, 'order_id' => $order_id ),
+        // Check if merchant configured a custom PaperPay In URL in settings
+        $options    = get_option( 'woocommerce_paper_id_settings', array() );
+        $custom_url = ! empty( $options['custom_payment_url'] ) ? trim( $options['custom_payment_url'] ) : '';
+
+        if ( ! empty( $custom_url ) && false === strpos( $custom_url, 'sl-surabaya' ) ) {
+            $base_pay_url    = 0 === strpos( $custom_url, 'http' ) ? $custom_url : 'https://' . $custom_url;
+            $dynamic_pay_url = add_query_arg( array(
+                'amount'       => (int) round( $amount ),
+                'order_id'     => $order_id,
+                'order_number' => $order_number,
+            ), $base_pay_url );
+
+            Paper_ID_Helper::log( "Using Custom PaperPay Link for Order #{$order_id}: {$dynamic_pay_url}", 'info' );
+
+            return array(
+                'success'     => true,
+                'payment_url' => $dynamic_pay_url,
+                'raw'         => array( 'source' => 'custom_payment_url', 'url' => $dynamic_pay_url ),
+            );
+        }
+
+        $error_msg = sprintf(
+            __( 'Gagal mendapatkan URL pembayaran dari Paper.id untuk Order #%s. Silakan periksa log di WooCommerce > Status > Logs atau pastikan Client ID & Client Secret Anda di Pengaturan Paper.id sudah valid.', 'paper-id-woocommerce' ),
+            $order_number
         );
+        Paper_ID_Helper::log( "Payment Request Failed: {$error_msg}", 'error' );
+
+        return new WP_Error( 'paper_id_payment_failed', $error_msg );
+    }
+
+    /**
+     * Helper to extract payment URL / link from API response arrays.
+     *
+     * @param array $data API response array.
+     * @return string|null Formatted payment URL or null.
+     */
+    private static function extract_payment_url_from_data( $data ) {
+        if ( ! is_array( $data ) ) {
+            return null;
+        }
+
+        $candidates = array();
+
+        if ( isset( $data['data'] ) && is_array( $data['data'] ) ) {
+            $d = $data['data'];
+            if ( ! empty( $d['payment_link'] ) ) { $candidates[] = $d['payment_link']; }
+            if ( ! empty( $d['payper_url'] ) ) { $candidates[] = $d['payper_url']; }
+            if ( ! empty( $d['payment_url'] ) ) { $candidates[] = $d['payment_url']; }
+            if ( ! empty( $d['url'] ) ) { $candidates[] = $d['url']; }
+        }
+
+        if ( ! empty( $data['payment_link'] ) ) { $candidates[] = $data['payment_link']; }
+        if ( ! empty( $data['payper_url'] ) ) { $candidates[] = $data['payper_url']; }
+        if ( ! empty( $data['payment_url'] ) ) { $candidates[] = $data['payment_url']; }
+        if ( ! empty( $data['url'] ) ) { $candidates[] = $data['url']; }
+
+        foreach ( $candidates as $candidate ) {
+            if ( is_string( $candidate ) && ! empty( trim( $candidate ) ) ) {
+                $url = trim( $candidate );
+                return 0 === strpos( $url, 'http' ) ? $url : 'https://' . $url;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Helper to extract invoice UUID from API response arrays.
+     *
+     * @param array $data API response array.
+     * @return string|null Invoice UUID or null.
+     */
+    private static function extract_uuid_from_data( $data ) {
+        if ( ! is_array( $data ) ) {
+            return null;
+        }
+
+        if ( isset( $data['data'] ) && is_array( $data['data'] ) ) {
+            $d = $data['data'];
+            if ( ! empty( $d['uuid'] ) ) { return $d['uuid']; }
+            if ( ! empty( $d['id'] ) ) { return $d['id']; }
+            if ( isset( $d['invoice'] ) && is_array( $d['invoice'] ) && ! empty( $d['invoice']['uuid'] ) ) {
+                return $d['invoice']['uuid'];
+            }
+        }
+
+        if ( ! empty( $data['uuid'] ) ) { return $data['uuid']; }
+        if ( ! empty( $data['id'] ) ) { return $data['id']; }
+        if ( isset( $data['invoice'] ) && is_array( $data['invoice'] ) && ! empty( $data['invoice']['uuid'] ) ) {
+            return $data['invoice']['uuid'];
+        }
+
+        return null;
     }
 }
