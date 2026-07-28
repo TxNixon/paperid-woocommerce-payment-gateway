@@ -305,7 +305,10 @@ class Paper_ID_API {
 
                         if ( ! is_wp_error( $detail_res ) && 200 === wp_remote_retrieve_response_code( $detail_res ) ) {
                             $detail_body = json_decode( wp_remote_retrieve_body( $detail_res ), true );
-                            if ( ! empty( $detail_body['data']['payment_link'] ) ) {
+                            $p_status    = isset( $detail_body['data']['status']['payment_status'] ) ? $detail_body['data']['status']['payment_status'] : '';
+                            
+                            // STRICT CHECK: Never redirect to an already PAID invoice!
+                            if ( 'paid' !== $p_status && ! empty( $detail_body['data']['payment_link'] ) ) {
                                 $raw_link    = $detail_body['data']['payment_link'];
                                 $payment_url = 0 === strpos( $raw_link, 'http' ) ? $raw_link : 'https://' . $raw_link;
                                 Paper_ID_Helper::log( "Payment Link Generated Successfully: {$payment_url}", 'info' );
@@ -321,64 +324,6 @@ class Paper_ID_API {
             }
         }
 
-        // Step 3: Fallback endpoints if direct sales-invoices flow fails
-        $endpoints = array(
-            rtrim( $base_url, '/' ) . '/api/v1/pay-in/payment-link',
-            rtrim( $base_url, '/' ) . '/api/v1/digital-payment',
-            rtrim( $base_url, '/' ) . '/api/v1/payment-request',
-        );
-
-        $last_error = null;
-
-        foreach ( $endpoints as $endpoint ) {
-            $response = wp_remote_post( $endpoint, array(
-                'headers' => $headers,
-                'body'    => wp_json_encode( $payload ),
-                'timeout' => 30,
-            ) );
-
-            if ( is_wp_error( $response ) ) {
-                $last_error = 'HTTP Error (' . $endpoint . '): ' . $response->get_error_message();
-                Paper_ID_Helper::log( $last_error, 'error' );
-                continue;
-            }
-
-            $status_code = wp_remote_retrieve_response_code( $response );
-            $body_str    = wp_remote_retrieve_body( $response );
-            $body        = json_decode( $body_str, true );
-
-            Paper_ID_Helper::log( "Fallback API Response from {$endpoint} [HTTP {$status_code}]: " . $body_str, $status_code >= 200 && $status_code < 300 ? 'info' : 'error' );
-
-            if ( $status_code >= 200 && $status_code < 300 ) {
-                $payment_url = '';
-                if ( ! empty( $body['data']['payment_url'] ) ) {
-                    $payment_url = $body['data']['payment_url'];
-                } elseif ( ! empty( $body['data']['link_url'] ) ) {
-                    $payment_url = $body['data']['link_url'];
-                } elseif ( ! empty( $body['payment_url'] ) ) {
-                    $payment_url = $body['payment_url'];
-                }
-
-                if ( ! empty( $payment_url ) ) {
-                    return array(
-                        'success'     => true,
-                        'payment_url' => 0 === strpos( $payment_url, 'http' ) ? $payment_url : 'https://' . $payment_url,
-                        'raw'         => $body,
-                    );
-                }
-            }
-
-            $msg = isset( $body['message'] ) ? ( is_array( $body['message'] ) ? implode( ', ', $body['message'] ) : $body['message'] ) : '';
-            if ( isset( $body['error']['message'] ) ) {
-                $msg = $body['error']['message'];
-            }
-            $last_error = sprintf( __( 'Paper.id API Response [HTTP %d]: %s', 'paper-id-woocommerce' ), $status_code, $msg ? $msg : $body_str );
-
-            if ( 404 !== $status_code ) {
-                break;
-            }
-        }
-
-        return new WP_Error( 'paper_id_api_error', $last_error ? $last_error : __( 'Gagal terhubung ke Paper.id API.', 'paper-id-woocommerce' ) );
+        return new WP_Error( 'paper_id_config_error', __( 'Silakan masukkan Tautan Pembayaran / PaperPay In resmi toko Anda pada menu WooCommerce > Settings > Payments > Paper.id Payment Gateway.', 'paper-id-woocommerce' ) );
     }
 }
