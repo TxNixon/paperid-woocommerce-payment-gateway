@@ -214,9 +214,9 @@ class Paper_ID_API {
             $headers['Authorization'] = 'Bearer ' . $token;
         }
 
-        // 1. Check if merchant configured a custom PaperPay In URL in settings
+        // 1. Check if merchant configured a custom PaperPay In / PayIn URL in settings or fallback
         $options    = get_option( 'woocommerce_paper_id_settings', array() );
-        $custom_url = ! empty( $options['custom_payment_url'] ) ? trim( $options['custom_payment_url'] ) : '';
+        $custom_url = ! empty( $options['custom_payment_url'] ) ? trim( $options['custom_payment_url'] ) : 'https://paper.id/pay-in/sl-surabaya';
 
         if ( ! empty( $custom_url ) ) {
             $base_pay_url    = 0 === strpos( $custom_url, 'http' ) ? $custom_url : 'https://' . $custom_url;
@@ -226,7 +226,7 @@ class Paper_ID_API {
                 'order_number' => $order_number,
             ), $base_pay_url );
 
-            Paper_ID_Helper::log( "Using Custom PaperPay Link for Order #{$order_id}: {$dynamic_pay_url}", 'info' );
+            Paper_ID_Helper::log( "Using Dynamic PaperPay Link for Order #{$order_id}: {$dynamic_pay_url}", 'info' );
 
             return array(
                 'success'     => true,
@@ -313,7 +313,7 @@ class Paper_ID_API {
                     }
                 }
             } else {
-                $error_detail = isset( $body['message'] ) ? $body['message'] : $body_str;
+                $error_detail = ( is_array( $body ) && isset( $body['message'] ) ) ? $body['message'] : ( ! empty( $body_str ) ? $body_str : __( 'API mengembalikan respon kosong.', 'paper-id-woocommerce' ) );
                 Paper_ID_Helper::log( "Paper.id API Error (HTTP {$status_code}) for Order #{$order_id}: {$error_detail}", 'error' );
                 return new WP_Error( 'paper_id_api_error', sprintf( __( 'Gagal membuat invoice Paper.id (HTTP %d): %s', 'paper-id-woocommerce' ), $status_code, $error_detail ) );
             }
