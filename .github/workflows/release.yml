@@ -1,0 +1,30 @@
+name: Build & Release Plugin ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Create Plugin Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create Plugin ZIP Package
+        run: |
+          mkdir -p build/paper-id-woocommerce
+          cp -r assets includes paper-id-woocommerce.php README.md readme.txt build/paper-id-woocommerce/
+          cd build
+          zip -r ../paper-id-woocommerce.zip paper-id-woocommerce
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: paper-id-woocommerce.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
