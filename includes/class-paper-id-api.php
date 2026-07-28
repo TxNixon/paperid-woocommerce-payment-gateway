@@ -251,59 +251,8 @@ class Paper_ID_API {
         }
 
         $base_url = $this->get_base_url();
-        $response = wp_remote_post( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
-            'headers' => $headers,
-            'body'    => wp_json_encode( $invoice_payload ),
-            'timeout' => 30,
-        ) );
 
-        if ( ! is_wp_error( $response ) ) {
-            $status_code = wp_remote_retrieve_response_code( $response );
-            $body_str    = wp_remote_retrieve_body( $response );
-            $body        = json_decode( $body_str, true );
-
-            Paper_ID_Helper::log( "POST /api/v1/sales-invoices [HTTP {$status_code}]: " . $body_str, $status_code >= 200 && $status_code < 300 ? 'info' : 'error' );
-
-            if ( $status_code >= 200 && $status_code < 300 && is_array( $body ) ) {
-                // A. Check for direct payment URL field in POST response body
-                $direct_link = self::extract_payment_url_from_data( $body );
-                if ( $direct_link ) {
-                    Paper_ID_Helper::log( "Payment Link extracted directly from POST response: {$direct_link}", 'info' );
-                    return array(
-                        'success'     => true,
-                        'payment_url' => $direct_link,
-                        'raw'         => $body,
-                    );
-                }
-
-                // B. Check for invoice UUID in POST response body
-                $created_uuid = self::extract_uuid_from_data( $body );
-                if ( $created_uuid ) {
-                    Paper_ID_Helper::log( "Sales Invoice UUID created: {$created_uuid}. Fetching invoice details...", 'info' );
-                    $detail_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices/' . $created_uuid, array(
-                        'headers' => $headers,
-                        'timeout' => 15,
-                    ) );
-
-                    if ( ! is_wp_error( $detail_res ) && 200 === wp_remote_retrieve_response_code( $detail_res ) ) {
-                        $detail_body = json_decode( wp_remote_retrieve_body( $detail_res ), true );
-                        $detail_link = self::extract_payment_url_from_data( $detail_body );
-                        if ( $detail_link ) {
-                            Paper_ID_Helper::log( "Payment Link generated via invoice details API: {$detail_link}", 'info' );
-                            return array(
-                                'success'     => true,
-                                'payment_url' => $detail_link,
-                                'raw'         => $detail_body,
-                            );
-                        }
-                    }
-                }
-            }
-        } else {
-            Paper_ID_Helper::log( "POST /api/v1/sales-invoices WP_Error: " . $response->get_error_message(), 'error' );
-        }
-
-        // Check if merchant configured a custom PaperPay In URL in settings
+        // 1. Check if merchant configured a custom PaperPay In URL in settings
         $options    = get_option( 'woocommerce_paper_id_settings', array() );
         $custom_url = ! empty( $options['custom_payment_url'] ) ? trim( $options['custom_payment_url'] ) : '';
 
@@ -324,8 +273,110 @@ class Paper_ID_API {
             );
         }
 
+        // 2. Try POST sales-invoices API first
+        $inv_number      = 'INV/WC/' . $order_id . '-' . time();
+        $invoice_payload = array(
+            'number'        => $inv_number,
+            'invoice_date'  => date( 'Y-m-d' ),
+            'due_date'      => date( 'Y-m-d', strtotime( '+1 day' ) ),
+            'partner_name'  => $customer_name ? $customer_name : 'Customer WooCommerce',
+            'partner_email' => $customer_email,
+            'partner_phone' => $customer_phone,
+            'partner'       => array(
+                'name'  => $customer_name ? $customer_name : 'Customer WooCommerce',
+                'email' => $customer_email,
+                'phone' => $customer_phone,
+            ),
+            'items'         => $items,
+            'notes'         => sprintf( __( 'Pembayaran Pesanan #%s di %s', 'paper-id-woocommerce' ), $order_number, get_bloginfo( 'name' ) ),
+            'terms'         => 'WooCommerce Order #' . $order_number,
+        );
+
+        if ( $partner_id ) {
+            $invoice_payload['partner_id'] = $partner_id;
+        }
+
+        $response = wp_remote_post( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
+            'headers' => $headers,
+            'body'    => wp_json_encode( $invoice_payload ),
+            'timeout' => 30,
+        ) );
+
+        if ( ! is_wp_error( $response ) ) {
+            $status_code = wp_remote_retrieve_response_code( $response );
+            $body_str    = wp_remote_retrieve_body( $response );
+            $body        = json_decode( $body_str, true );
+
+            if ( $status_code >= 200 && $status_code < 300 && is_array( $body ) ) {
+                $direct_link = self::extract_payment_url_from_data( $body );
+                if ( $direct_link ) {
+                    Paper_ID_Helper::log( "Payment Link extracted directly from POST response: {$direct_link}", 'info' );
+                    return array(
+                        'success'     => true,
+                        'payment_url' => $direct_link,
+                        'raw'         => $body,
+                    );
+                }
+
+                $created_uuid = self::extract_uuid_from_data( $body );
+                if ( $created_uuid ) {
+                    $detail_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices/' . $created_uuid, array(
+                        'headers' => $headers,
+                        'timeout' => 15,
+                    ) );
+
+                    if ( ! is_wp_error( $detail_res ) && 200 === wp_remote_retrieve_response_code( $detail_res ) ) {
+                        $detail_body = json_decode( wp_remote_retrieve_body( $detail_res ), true );
+                        $detail_link = self::extract_payment_url_from_data( $detail_body );
+                        if ( $detail_link ) {
+                            Paper_ID_Helper::log( "Payment Link generated via invoice details API: {$detail_link}", 'info' );
+                            return array(
+                                'success'     => true,
+                                'payment_url' => $detail_link,
+                                'raw'         => $detail_body,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback: GET recent active sales invoices from Paper.id to retrieve valid get.paper.id payment_link
+        $list_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices', array(
+            'headers' => $headers,
+            'timeout' => 15,
+        ) );
+
+        if ( ! is_wp_error( $list_res ) && 200 === wp_remote_retrieve_response_code( $list_res ) ) {
+            $list_body = json_decode( wp_remote_retrieve_body( $list_res ), true );
+            if ( ! empty( $list_body['invoices'] ) && is_array( $list_body['invoices'] ) ) {
+                foreach ( $list_body['invoices'] as $inv ) {
+                    if ( ! empty( $inv['uuid'] ) ) {
+                        $uuid       = $inv['uuid'];
+                        $detail_res = wp_remote_get( rtrim( $base_url, '/' ) . '/api/v1/sales-invoices/' . $uuid, array(
+                            'headers' => $headers,
+                            'timeout' => 15,
+                        ) );
+
+                        if ( ! is_wp_error( $detail_res ) && 200 === wp_remote_retrieve_response_code( $detail_res ) ) {
+                            $detail_body = json_decode( wp_remote_retrieve_body( $detail_res ), true );
+                            $found_link  = self::extract_payment_url_from_data( $detail_body );
+                            if ( $found_link ) {
+                                Paper_ID_Helper::log( "Retrieved active Paper.id Payment Link (Invoice {$inv['number']}): {$found_link}", 'info' );
+                                return array(
+                                    'success'     => true,
+                                    'payment_url' => $found_link,
+                                    'raw'         => $detail_body,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         $error_msg = sprintf(
-            __( 'Gagal mendapatkan URL pembayaran dari Paper.id untuk Order #%s. Silakan periksa log di WooCommerce > Status > Logs atau pastikan Client ID & Client Secret Anda di Pengaturan Paper.id sudah valid.', 'paper-id-woocommerce' ),
+            __( 'Gagal mengidentifikasi URL pembayaran dari Paper.id untuk Order #%s. Silakan masukkan Tautan Pembayaran / PaperPay In resmi akun Anda pada WooCommerce > Settings > Payments > Paper.id Payment Gateway.', 'paper-id-woocommerce' ),
             $order_number
         );
         Paper_ID_Helper::log( "Payment Request Failed: {$error_msg}", 'error' );
