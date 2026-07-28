@@ -49,10 +49,13 @@ class Paper_ID_Updater {
      * @param string $github_token Optional GitHub PAT token for private repos.
      */
     public function __construct( $plugin_file, $github_repo, $github_token = '' ) {
-        $this->plugin_file     = $plugin_file;
-        $this->github_repo     = trim( $github_repo );
-        $this->github_token    = trim( $github_token );
-        $this->slug            = plugin_basename( $plugin_file );
+        $this->plugin_file  = $plugin_file;
+        $repo               = trim( $github_repo );
+        $repo               = preg_replace( '#^https?://github\.com/#i', '', $repo );
+        $repo               = trim( $repo, '/' );
+        $this->github_repo  = ! empty( $repo ) ? $repo : 'TxNixon/wc-paperid';
+        $this->github_token = trim( $github_token );
+        $this->slug         = plugin_basename( $plugin_file );
         $this->current_version = PAPER_ID_WC_VERSION;
 
         if ( ! empty( $this->github_repo ) ) {

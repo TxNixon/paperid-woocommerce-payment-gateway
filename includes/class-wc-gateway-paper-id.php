@@ -156,9 +156,9 @@ class WC_Gateway_Paper_ID extends WC_Payment_Gateway {
             'github_repo' => array(
                 'title'       => __( 'GitHub Repository', 'paper-id-woocommerce' ),
                 'type'        => 'text',
-                'placeholder' => 'TxNixon/paperid-woocommerce-payment-gateway',
-                'description' => __( 'Format: <code>username/repository-name</code> (contoh: <code>TxNixon/paperid-woocommerce-payment-gateway</code>).', 'paper-id-woocommerce' ),
-                'default'     => 'TxNixon/paperid-woocommerce-payment-gateway',
+                'placeholder' => 'TxNixon/wc-paperid',
+                'description' => __( 'Format: <code>username/repository-name</code> (contoh: <code>TxNixon/wc-paperid</code>).', 'paper-id-woocommerce' ),
+                'default'     => 'TxNixon/wc-paperid',
             ),
             'github_token' => array(
                 'title'       => __( 'GitHub Personal Token (Opsional)', 'paper-id-woocommerce' ),
@@ -174,6 +174,18 @@ class WC_Gateway_Paper_ID extends WC_Payment_Gateway {
                 'description' => sprintf( __( 'Log disimpan di WooCommerce status log (%s)', 'paper-id-woocommerce' ), '<code>WooCommerce > Status > Logs</code>' ),
             ),
         );
+    }
+
+    /**
+     * Process admin options and sanitize github_repo URL automatically.
+     */
+    public function process_admin_options() {
+        if ( isset( $_POST['woocommerce_paper_id_github_repo'] ) ) {
+            $raw_repo = sanitize_text_field( wp_unslash( $_POST['woocommerce_paper_id_github_repo'] ) );
+            $clean    = trim( preg_replace( '#^https?://github\.com/#i', '', $raw_repo ), '/' );
+            $_POST['woocommerce_paper_id_github_repo'] = ! empty( $clean ) ? $clean : 'TxNixon/wc-paperid';
+        }
+        return parent::process_admin_options();
     }
 
     /**

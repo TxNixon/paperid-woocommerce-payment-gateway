@@ -3,7 +3,7 @@
  * Plugin Name: Paper.id Payment Gateway for WooCommerce
  * Plugin URI: https://paper.id
  * Description: Accept Credit Cards, QRIS, Virtual Account, and E-Wallet payments in WooCommerce using Paper.id Payment Gateway.
- * Version: 1.0.9
+ * Version: 1.1.0
  * Author: Joe
  * Author URI: https://paper.id
  * Text Domain: paper-id-woocommerce
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define Plugin Constants
-define( 'PAPER_ID_WC_VERSION', '1.0.9' );
+define( 'PAPER_ID_WC_VERSION', '1.1.0' );
 define( 'PAPER_ID_WC_FILE', __FILE__ );
 define( 'PAPER_ID_WC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'PAPER_ID_WC_URL', plugin_dir_url( __FILE__ ) );
@@ -41,13 +41,14 @@ function paper_id_wc_init() {
     // Register Gateway to WooCommerce
     add_filter( 'woocommerce_payment_gateways', 'paper_id_wc_add_gateway' );
 
-    // Initialize GitHub Auto Updater if GitHub Repository is configured
+    // Initialize GitHub Auto Updater
     $options      = get_option( 'woocommerce_paper_id_settings', array() );
-    $github_repo  = ! empty( $options['github_repo'] ) ? trim( $options['github_repo'] ) : 'TxNixon/paperid-woocommerce-payment-gateway';
+    $raw_repo     = ! empty( $options['github_repo'] ) ? trim( $options['github_repo'] ) : 'TxNixon/wc-paperid';
+    $github_repo  = trim( preg_replace( '#^https?://github\.com/#i', '', $raw_repo ), '/' );
+    $github_repo  = ! empty( $github_repo ) ? $github_repo : 'TxNixon/wc-paperid';
     $github_token = ! empty( $options['github_token'] ) ? trim( $options['github_token'] ) : '';
-    if ( ! empty( $github_repo ) ) {
-        new Paper_ID_Updater( PAPER_ID_WC_FILE, $github_repo, $github_token );
-    }
+
+    new Paper_ID_Updater( PAPER_ID_WC_FILE, $github_repo, $github_token );
 }
 add_action( 'plugins_loaded', 'paper_id_wc_init', 11 );
 
